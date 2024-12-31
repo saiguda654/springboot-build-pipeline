@@ -1,10 +1,5 @@
 #!/bin/bash
 
-#---------------------------------------------#
-# Author: Adam WezvaTechnologies
-# Call/Whatsapp: +91-9739110917
-#---------------------------------------------#
-
 # Ensure script is run with root privileges
 if [ "$EUID" -ne 0 ]; then
   echo "Please run this script as root or sudo privileges "
