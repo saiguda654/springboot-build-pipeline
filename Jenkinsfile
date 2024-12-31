@@ -4,7 +4,6 @@ pipeline {
   environment { 
     registry = "guda654/democicd" 
     registryCredential = 'dockerhub' 
-    JAVA_HOME = '/usr/lib/jvm/java-1.8.0-amazon-corretto'  // Set JAVA_HOME for all stages
   }
 
   stages {
@@ -39,7 +38,7 @@ pipeline {
       steps { 
         echo "Running Static Application Security Testing using SonarQube Scanner ..."
         withSonarQubeEnv('sonarqube') {
-          sh 'mvn sonar:sonar -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml -Dsonar.dependencyCheck.jsonReportPath=target/dependency-check-report.json -Dsonar.dependencyCheck.htmlReportPath=target/dependency-check-report.html -Dsonar.projectName=saiguda_cicd'
+          sh "mvn -X sonar:sonar -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml -Dsonar.dependencyCheck.jsonReportPath=target/dependency-check-report.json -Dsonar.dependencyCheck.htmlReportPath=target/dependency-check-report.html -Dsonar.projectName=saiguda_cicd"
         }
       }
     }
