@@ -118,7 +118,16 @@ pipeline {
       steps {
         echo "Smoke Testing the Docker Image"
         
-        // Run the container
+        // Remove any existing container with the name "smokerun" (if it exists)
+        sh '''
+          existing_container=$(docker ps -a -q -f name=smokerun)
+          if [ -n "$existing_container" ]; then
+            echo "Removing existing container with name smokerun"
+            docker rm --force smokerun
+          fi
+        '''
+
+        // Run the new container
         sh "docker run -d --name smokerun -p 8080:8080 ${registry}:latest"
 
         // Ensure check.sh has execute permissions before running it
@@ -127,10 +136,11 @@ pipeline {
         // Run the smoke test script
         sh "sleep 90; ./check.sh"
 
-        // Clean up the Docker container
+        // Clean up the Docker container after the test
         sh '''
           container_id=$(docker ps -q -f name=smokerun)
           if [ -n "$container_id" ]; then
+            echo "Removing container smokerun"
             docker rm --force smokerun
           fi
         '''
