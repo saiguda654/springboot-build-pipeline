@@ -1,9 +1,9 @@
 pipeline {
   agent { label 'build' }
-  
-  environment { 
-    registry = "guda654/democicd" 
-    registryCredential = 'dockerhub' 
+
+  environment {
+    registry = "guda654/democicd"
+    registryCredential = 'dockerhub'
     JAVA_8_HOME = "/usr/lib/jvm/java-1.8.0-amazon-corretto" // Java 8 path
     JAVA_11_HOME = "/usr/lib/jvm/java-11-amazon-corretto.x86_64" // Java 11 path
   }
@@ -21,11 +21,11 @@ pipeline {
 
         // Use Java 8 for the build stage
         script {
-          sh """
-            export JAVA_HOME=\$JAVA_8_HOME
-            export PATH=\$JAVA_HOME/bin:\$PATH
+          sh '''
+            export JAVA_HOME=$JAVA_8_HOME
+            export PATH=$JAVA_HOME/bin:$PATH
             mvn clean package
-          """
+          '''
         }
       }
     }
@@ -36,49 +36,53 @@ pipeline {
 
         // Use Java 8 for code coverage
         script {
-          sh """
-            export JAVA_HOME=\$JAVA_8_HOME
-            export PATH=\$JAVA_HOME/bin:\$PATH
+          sh '''
+            export JAVA_HOME=$JAVA_8_HOME
+            export PATH=$JAVA_HOME/bin:$PATH
             mvn jacoco:report
-          """
+          '''
         }
       }
     }
 
     stage('Stage III: SCA') {
-      steps { 
+      steps {
         echo "Running Software Composition Analysis using OWASP Dependency-Check ..."
 
         // Use Java 8 for Software Composition Analysis
         script {
-          sh """
-            export JAVA_HOME=\$JAVA_8_HOME
-            export PATH=\$JAVA_HOME/bin:\$PATH
+          sh '''
+            export JAVA_HOME=$JAVA_8_HOME
+            export PATH=$JAVA_HOME/bin:$PATH
             mvn org.owasp:dependency-check-maven:check
-          """
+          '''
         }
       }
     }
 
     stage('Stage IV: SAST') {
-      steps { 
+      steps {
         echo "Running Static Application Security Testing using SonarQube Scanner ..."
 
         // Use Java 11 for SonarQube scanning
-        script {
-          sh """
-            export JAVA_HOME=\$JAVA_11_HOME
-            export PATH=\$JAVA_HOME/bin:\$PATH
-            withSonarQubeEnv('sonarqube') {
-              mvn -X sonar:sonar -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml -Dsonar.dependencyCheck.jsonReportPath=target/dependency-check-report.json -Dsonar.dependencyCheck.htmlReportPath=target/dependency-check-report.html -Dsonar.projectName=saiguda_cicd
-            }
-          """
+        withSonarQubeEnv('sonarqube') {
+          script {
+            sh '''
+              export JAVA_HOME=$JAVA_11_HOME
+              export PATH=$JAVA_HOME/bin:$PATH
+              mvn -X sonar:sonar \
+                -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
+                -Dsonar.dependencyCheck.jsonReportPath=target/dependency-check-report.json \
+                -Dsonar.dependencyCheck.htmlReportPath=target/dependency-check-report.html \
+                -Dsonar.projectName=saiguda_cicd
+            '''
+          }
         }
       }
     }
 
     stage('Stage V: Quality Gates') {
-      steps { 
+      steps {
         echo "Running Quality Gates to verify the code quality"
         script {
           timeout(time: 1, unit: 'MINUTES') {
@@ -92,10 +96,10 @@ pipeline {
     }
 
     stage('Stage VI: Build Image') {
-      steps { 
+      steps {
         echo "Building Docker Image"
         script {
-          docker.withRegistry('', registryCredential) { 
+          docker.withRegistry('', registryCredential) {
             def myImage = docker.build("${registry}:latest")  // Build the image with tag 'latest'
             myImage.push()  // Push the image to Docker registry
           }
@@ -104,14 +108,14 @@ pipeline {
     }
 
     stage('Stage VII: Scan Image') {
-      steps { 
+      steps {
         echo "Scanning Image for Vulnerabilities"
         sh "trivy image --scanners vuln --offline-scan ${registry}:latest > trivyresults.txt"
       }
     }
 
     stage('Stage VIII: Smoke Test') {
-      steps { 
+      steps {
         echo "Smoke Testing the Docker Image"
         sh "docker run -d --name smokerun -p 8080:8080 ${registry}:latest"
         sh "sleep 90; ./check.sh"  // Wait for the app to be up and run checks
