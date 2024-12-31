@@ -110,7 +110,7 @@ pipeline {
     stage('Stage VII: Scan Image') {
       steps {
         echo "Scanning Image for Vulnerabilities"
-        sh "trivy image --scanners vuln --offline-scan ${registry}:latest > trivyresults.txt"
+        sh "trivy image --severity HIGH,CRITICAL --offline-scan ${registry}:latest > trivyresults.txt"
       }
     }
 
