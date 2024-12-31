@@ -4,6 +4,8 @@ pipeline {
   environment { 
     registry = "guda654/democicd" 
     registryCredential = 'dockerhub' 
+    JAVA_8_HOME = "/usr/lib/jvm/java-1.8.0-amazon-corretto" // Java 8 path
+    JAVA_11_HOME = "/usr/lib/jvm/java-11-amazon-corretto.x86_64" // Java 11 path
   }
 
   stages {
@@ -16,29 +18,61 @@ pipeline {
     stage('Stage I: Build') {
       steps {
         echo "Building Jar Component ..."
-        sh "mvn clean package"
+
+        // Use Java 8 for the build stage
+        script {
+          sh """
+            export JAVA_HOME=\$JAVA_8_HOME
+            export PATH=\$JAVA_HOME/bin:\$PATH
+            mvn clean package
+          """
+        }
       }
     }
 
     stage('Stage II: Code Coverage') {
       steps {
         echo "Running Code Coverage ..."
-        sh "mvn jacoco:report"
+
+        // Use Java 8 for code coverage
+        script {
+          sh """
+            export JAVA_HOME=\$JAVA_8_HOME
+            export PATH=\$JAVA_HOME/bin:\$PATH
+            mvn jacoco:report
+          """
+        }
       }
     }
 
     stage('Stage III: SCA') {
       steps { 
         echo "Running Software Composition Analysis using OWASP Dependency-Check ..."
-        sh "mvn org.owasp:dependency-check-maven:check"
+
+        // Use Java 8 for Software Composition Analysis
+        script {
+          sh """
+            export JAVA_HOME=\$JAVA_8_HOME
+            export PATH=\$JAVA_HOME/bin:\$PATH
+            mvn org.owasp:dependency-check-maven:check
+          """
+        }
       }
     }
 
     stage('Stage IV: SAST') {
       steps { 
         echo "Running Static Application Security Testing using SonarQube Scanner ..."
-        withSonarQubeEnv('sonarqube') {
-          sh "mvn -X sonar:sonar -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml -Dsonar.dependencyCheck.jsonReportPath=target/dependency-check-report.json -Dsonar.dependencyCheck.htmlReportPath=target/dependency-check-report.html -Dsonar.projectName=saiguda_cicd"
+
+        // Use Java 11 for SonarQube scanning
+        script {
+          sh """
+            export JAVA_HOME=\$JAVA_11_HOME
+            export PATH=\$JAVA_HOME/bin:\$PATH
+            withSonarQubeEnv('sonarqube') {
+              mvn -X sonar:sonar -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml -Dsonar.dependencyCheck.jsonReportPath=target/dependency-check-report.json -Dsonar.dependencyCheck.htmlReportPath=target/dependency-check-report.html -Dsonar.projectName=saiguda_cicd
+            }
+          """
         }
       }
     }
