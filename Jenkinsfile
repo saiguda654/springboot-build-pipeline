@@ -117,9 +117,23 @@ pipeline {
     stage('Stage VIII: Smoke Test') {
       steps {
         echo "Smoke Testing the Docker Image"
+        
+        // Run the container
         sh "docker run -d --name smokerun -p 8080:8080 ${registry}:latest"
-        sh "sleep 90; ./check.sh"  // Wait for the app to be up and run checks
-        sh "docker rm --force smokerun"  // Clean up the container
+
+        // Ensure check.sh has execute permissions before running it
+        sh 'chmod +x ./check.sh'
+
+        // Run the smoke test script
+        sh "sleep 90; ./check.sh"
+
+        // Clean up the Docker container
+        sh '''
+          container_id=$(docker ps -q -f name=smokerun)
+          if [ -n "$container_id" ]; then
+            docker rm --force smokerun
+          fi
+        '''
       }
     }
   }
