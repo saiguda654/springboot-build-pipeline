@@ -14,10 +14,10 @@ fi
 grep "CRITICAL" trivyresults.txt > /dev/null
 if [ $? -ne "0" ]; then
    echo "============================================================="
-   echo "Docker Image adamtravis/democicd:latest is ready for testing"
+   echo "Docker Image guda654/democicd:latest is ready for testing"
    echo "============================================================="
 else
    echo "============================================================="
-   echo "Docker Image adamtravis/democicd:latest has vulnerabilities!!"
+   echo "Docker Image guda654/democicd:latest has vulnerabilities!!"
    echo "============================================================="
 fi
