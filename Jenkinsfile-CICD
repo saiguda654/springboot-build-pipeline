@@ -1,47 +1,92 @@
 pipeline {
   agent { label 'build' }
-   environment { 
-        registry = "adamtravis/democicd" 
-        registryCredential = 'dockerhub' 
-   }
-   parameters {
-    password(name: 'PASSWD', defaultValue: '', description: 'Please Enter your Gitlab password')
-   }
+
+  environment {
+    registry = "guda654/democicd"
+    registryCredential = 'dockerhub'
+    JAVA_8_HOME = "/usr/lib/jvm/java-1.8.0-amazon-corretto" // Java 8 path
+    JAVA_11_HOME = "/usr/lib/jvm/java-11-amazon-corretto.x86_64" // Java 11 path
+  }
+
+  parameters {
+    string(name: 'IMAGETAG', defaultValue: '1', description: 'Please Enter the Image Tag to Deploy?')
+  }
 
   stages {
-   stage('Stage I: Build') {
+    stage('Checkout') {
       steps {
-        git branch: 'main', credentialsId: 'GitlabCred', url: 'https://gitlab.com/learndevopseasy/devsecops/springboot-build-pipeline.git'
+        git credentialsId: 'github', url: 'https://github.com/saiguda654/springboot-build-pipeline.git', branch: 'main'
+      }
+    }
+
+    stage('Stage I: Build') {
+      steps {
         echo "Building Jar Component ..."
-        sh "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64; mvn clean package "
+
+        // Use Java 8 for the build stage
+        script {
+          sh '''
+            export JAVA_HOME=$JAVA_8_HOME
+            export PATH=$JAVA_HOME/bin:$PATH
+            mvn clean package
+          '''
+        }
       }
     }
 
-   stage('Stage II: Code Coverage ') {
+    stage('Stage II: Code Coverage') {
       steps {
-	    echo "Running Code Coverage ..."
-        sh "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64; mvn jacoco:report"
+        echo "Running Code Coverage ..."
+
+        // Use Java 8 for code coverage
+        script {
+          sh '''
+            export JAVA_HOME=$JAVA_8_HOME
+            export PATH=$JAVA_HOME/bin:$PATH
+            mvn jacoco:report
+          '''
+        }
       }
     }
 
-   stage('Stage III: SCA') {
-      steps { 
+    stage('Stage III: SCA') {
+      steps {
         echo "Running Software Composition Analysis using OWASP Dependency-Check ..."
-        sh "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64; mvn org.owasp:dependency-check-maven:check"
+
+        // Use Java 8 for Software Composition Analysis
+        script {
+          sh '''
+            export JAVA_HOME=$JAVA_8_HOME
+            export PATH=$JAVA_HOME/bin:$PATH
+            mvn org.owasp:dependency-check-maven:check
+          '''
+        }
       }
     }
 
-   stage('Stage IV: SAST') {
-      steps { 
-        echo "Running Static application security testing using SonarQube Scanner ..."
-        withSonarQubeEnv('mysonarqube') {
-            sh 'mvn sonar:sonar -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml -Dsonar.dependencyCheck.jsonReportPath=target/dependency-check-report.json -Dsonar.dependencyCheck.htmlReportPath=target/dependency-check-report.html -Dsonar.projectName=wezvatech'
-       }
+    stage('Stage IV: SAST') {
+      steps {
+        echo "Running Static Application Security Testing using SonarQube Scanner ..."
+
+        // Use Java 11 for SonarQube scanning
+        withSonarQubeEnv('sonarqube') {
+          script {
+            sh '''
+              export JAVA_HOME=$JAVA_11_HOME
+              export PATH=$JAVA_HOME/bin:$PATH
+              mvn -X sonar:sonar \
+                -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
+                -Dsonar.dependencyCheck.jsonReportPath=target/dependency-check-report.json \
+                -Dsonar.dependencyCheck.htmlReportPath=target/dependency-check-report.html \
+                -Dsonar.projectName=saiguda_cicd
+            '''
+          }
+        }
       }
     }
 
-   stage('Stage V: QualityGates') {
-      steps { 
+    stage('Stage V: Quality Gates') {
+      steps {
         echo "Running Quality Gates to verify the code quality"
         script {
           timeout(time: 1, unit: 'MINUTES') {
@@ -49,49 +94,87 @@ pipeline {
             if (qg.status != 'OK') {
               error "Pipeline aborted due to quality gate failure: ${qg.status}"
             }
-           }
+          }
         }
       }
-    }
-   
-   stage('Stage VI: Build Image') {
-      steps { 
-        echo "Build Docker Image"
-        script {
-               docker.withRegistry( '', registryCredential ) { 
-                 myImage = docker.build registry + ":$BUILD_NUMBER" 
-                 myImage.push()
-                }
-        }
-      }
-    }
-        
-   stage('Stage VII: Scan Image ') {
-      steps { 
-        echo "Scanning Image for Vulnerabilities"
-        sh "trivy image --scanners vuln --offline-scan adamtravis/democicd:$BUILD_NUMBER > trivyresults.txt"
-        }
-    }
-          
-   stage('Stage VIII: Smoke Test ') {
-      steps { 
-        echo "Smoke Test the Image"
-        sh "docker run -d --name smokerun -p 8080:8080 adamtravis/democicd:$BUILD_NUMBER"
-        sh "sleep 90; ./check.sh"
-        sh "docker rm --force smokerun"
-        }
     }
 
-   stage('Stage IX: Trigger Deployment'){
-      steps { 
-       script {
-        TAG = "$BUILD_NUMBER"
-         echo "Trigger CD Pipeline"
-          build wait: false, job: 'springboot-cd-pipeline', parameters: [password(name: 'PASSWD', description: 'Please Enter your Gitlab password', value: params.PASSWD),string(name: 'IMAGETAG', value: TAG)]
-       }
+    stage('Stage VI: Build Image') {
+      steps {
+        echo "Building Docker Image"
+        script {
+          docker.withRegistry('', registryCredential) {
+            def myImage = docker.build("${registry}:latest")  // Build the image with tag 'latest'
+            myImage.push()  // Push the image to Docker registry
+          }
+        }
       }
     }
-   
+
+    stage('Stage VII: Scan Image') {
+      steps {
+        echo "Scanning Image for Vulnerabilities"
+        sh "trivy image --severity HIGH,CRITICAL --offline-scan ${registry}:latest > trivyresults.txt"
+      }
+    }
+
+    stage('Stage VIII: Smoke Test') {
+      steps {
+        echo "Smoke Testing the Docker Image"
+        
+        // Remove any existing container with the name "smokerun" (if it exists)
+        sh '''
+          existing_container=$(docker ps -a -q -f name=smokerun)
+          if [ -n "$existing_container" ]; then
+            echo "Removing existing container with name smokerun"
+            docker rm --force smokerun
+          fi
+        '''
+
+        // Run the new container
+        sh "docker run -d --name smokerun -p 8080:8080 ${registry}:latest"
+
+        // Ensure check.sh has execute permissions before running it
+        sh 'chmod +x ./check.sh'
+
+        // Run the smoke test script
+        sh "sleep 90; ./check.sh"
+
+        // Clean up the Docker container after the test
+        sh '''
+          container_id=$(docker ps -q -f name=smokerun)
+          if [ -n "$container_id" ]; then
+            echo "Removing container smokerun"
+            docker rm --force smokerun
+          fi
+        '''
+      }
+    }
+
+    stage('Deploy') {
+      steps {
+        // Checkout the repository from GitHub using credentials
+        git branch: 'main', credentialsId: 'github', url: 'https://github.com/saiguda654/spingboot-cd-pipeline-main.git'
+        
+        // Modify the deployment.yml file with the image tag
+        dir("./kubernetes") {
+          sh "sed -i 's|image: guda654.*|image: guda654/democicd:$IMAGETAG|g' deployment.yml"
+        }
+        
+        // Configure Git user for the commit
+        sh '''
+          git config user.name "Jenkins User"
+          git config user.email "jenkins@example.com"
+        '''
+        
+        // Check if there are changes and commit them
+        sh 'git diff --quiet || git commit -a -m "New deployment for Build $IMAGETAG"'
+        
+        // Push changes using the credentials
+        withCredentials([usernamePassword(credentialsId: 'github', usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD')]) {
+          sh "git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/saiguda654/spingboot-cd-pipeline-main.git main"
+        }
+      }
+    }
   }
 }
-
